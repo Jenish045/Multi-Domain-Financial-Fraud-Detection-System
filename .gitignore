@@ -1,0 +1,13 @@
+data/raw/
+data/processed/
+saved_models/
+results/
+venv/
+__pycache__/
+*.pyc
+*.keras
+*.pkl
+*.h5
+.env
+.DS_Store
+*.egg-info/
