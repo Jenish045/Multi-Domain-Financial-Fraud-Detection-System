@@ -112,13 +112,20 @@ class FraudPreprocessor:
         if domain == 'credit_card':
             pass # V1-V28 are already numeric, Time and Amount will be scaled later
         elif domain == 'insurance':
-            le = LabelEncoder()
+            label_encoders = {}
             for col in df_encoded.select_dtypes(include=['object']).columns:
+                le = LabelEncoder()
                 df_encoded[col] = le.fit_transform(df_encoded[col].astype(str))
+                label_encoders[col] = le
+            # Save label encoders, column order, and numeric medians for inference
+            joblib.dump(label_encoders, os.path.join(SAVED_MODELS, 'insurance_label_encoders.pkl'))
+            joblib.dump(list(df_encoded.columns), os.path.join(SAVED_MODELS, 'insurance_columns.pkl'))
+            medians = df_encoded.median().to_dict()
+            joblib.dump(medians, os.path.join(SAVED_MODELS, 'insurance_medians.pkl'))
         elif domain == 'ecommerce':
             df_encoded = df_encoded.copy()
 
-            # 🔥 Drop ID-like columns (high cardinality → useless + breaks scaling)
+            # Drop ID-like columns (high cardinality → useless + breaks scaling)
             drop_cols = []
             for col in df_encoded.columns:
                 if df_encoded[col].dtype == 'object' and df_encoded[col].nunique() > 0.9 * len(df_encoded):
@@ -126,10 +133,17 @@ class FraudPreprocessor:
 
             df_encoded = df_encoded.drop(columns=drop_cols)
 
-            # 🔥 Encode ALL remaining categorical columns
-            le = LabelEncoder()
+            # Encode ALL remaining categorical columns
+            label_encoders = {}
             for col in df_encoded.select_dtypes(include=['object']).columns:
+                le = LabelEncoder()
                 df_encoded[col] = le.fit_transform(df_encoded[col].astype(str))
+                label_encoders[col] = le
+            # Save ecommerce inference artifacts
+            joblib.dump(label_encoders, os.path.join(SAVED_MODELS, 'ecommerce_label_encoders.pkl'))
+            joblib.dump(list(df_encoded.columns), os.path.join(SAVED_MODELS, 'ecommerce_columns.pkl'))
+            medians = df_encoded.median().to_dict()
+            joblib.dump(medians, os.path.join(SAVED_MODELS, 'ecommerce_medians.pkl'))
                 
         return df_encoded
 

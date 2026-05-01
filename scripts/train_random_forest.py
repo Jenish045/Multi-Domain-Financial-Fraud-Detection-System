@@ -32,7 +32,7 @@ def main():
     X_encoded = preprocessor.encode_features(X_df, 'insurance')
     
     # Split first to avoid data leakage
-    X_temp, X_test, y_temp, y_test = preprocessor.split_data(X_encoded.values, y, temporal=False)[:4] # only want train/test splits for now, we'll do proper below
+    X_temp, X_test, y_temp, y_test = preprocessor.split_data(X_encoded.values, y, temporal=False)[:4]
     # Let's just use the robust split data from preprocessor
     X_train_unscaled, X_val_unscaled, X_test_unscaled, y_train, y_val, y_test = preprocessor.split_data(X_encoded.values, y, temporal=False)
 

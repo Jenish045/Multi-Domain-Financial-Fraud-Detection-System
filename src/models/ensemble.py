@@ -43,6 +43,16 @@ class FraudEnsemble:
         self.scaler_ins = None
         self.scaler_eco = None
         
+        # Insurance inference artifacts
+        self.ins_label_encoders = None
+        self.ins_columns = None
+        self.ins_medians = None
+        
+        # E-commerce inference artifacts
+        self.eco_label_encoders = None
+        self.eco_columns = None
+        self.eco_medians = None
+        
     def load_models(self):
         """Loads all required models and scalers."""
         self.ae_model = keras.models.load_model(os.path.join(SAVED_MODELS, 'autoencoder.keras'))
@@ -57,6 +67,16 @@ class FraudEnsemble:
         self.scaler_cc = joblib.load(os.path.join(SAVED_MODELS, 'scaler_credit_card.pkl'))
         self.scaler_ins = joblib.load(os.path.join(SAVED_MODELS, 'scaler_insurance.pkl'))
         self.scaler_eco = joblib.load(os.path.join(SAVED_MODELS, 'scaler_ecommerce.pkl'))
+        
+        # Load insurance inference artifacts
+        self.ins_label_encoders = joblib.load(os.path.join(SAVED_MODELS, 'insurance_label_encoders.pkl'))
+        self.ins_columns = joblib.load(os.path.join(SAVED_MODELS, 'insurance_columns.pkl'))
+        self.ins_medians = joblib.load(os.path.join(SAVED_MODELS, 'insurance_medians.pkl'))
+        
+        # Load e-commerce inference artifacts
+        self.eco_label_encoders = joblib.load(os.path.join(SAVED_MODELS, 'ecommerce_label_encoders.pkl'))
+        self.eco_columns = joblib.load(os.path.join(SAVED_MODELS, 'ecommerce_columns.pkl'))
+        self.eco_medians = joblib.load(os.path.join(SAVED_MODELS, 'ecommerce_medians.pkl'))
         
         self.models_loaded = True
         print("All models loaded successfully")
@@ -100,20 +120,60 @@ class FraudEnsemble:
         """Predicts insurance fraud instance.
         
         Args:
-            input_dict (dict): Dictionary of features.
+            input_dict (dict): Dictionary of features from the dashboard form.
         Returns:
             FraudResult: Result wrapper object.
         """
-        # Ensure ordered and shaped correctly; simplified columns expected.
-        df = pd.DataFrame([input_dict])
-        
-        # Applying scaler (assuming the raw columns match scaler expected inputs after feature engineering)
         import warnings
+        
+        # Start with median defaults for all 37 training columns
+        row = dict(self.ins_medians)
+        
+        # Map dashboard form fields to their corresponding training columns
+        field_mapping = {
+            'age': 'age',
+            'months_as_customer': 'months_as_customer',
+            'deductible': 'policy_deductable',
+            'total_claim_amount': 'total_claim_amount',
+            'injury_claim': 'injury_claim',
+            'property_claim': 'property_claim',
+            'vehicle_claim': 'vehicle_claim',
+            'policy_annual_premium': 'policy_annual_premium',
+            'bodily_injuries': 'bodily_injuries',
+            'witnesses': 'witnesses',
+            'number_of_vehicles_involved': 'number_of_vehicles_involved',
+            'incident_hour_of_the_day': 'incident_hour_of_the_day',
+            'recent_claim': 'recent_claim',
+            'young_driver': 'young_driver',
+        }
+        
+        # Overwrite numeric fields from form input
+        for form_key, col_name in field_mapping.items():
+            if form_key in input_dict and col_name in row:
+                row[col_name] = input_dict[form_key]
+        
+        # Encode categorical fields from the form using saved label encoders
+        categorical_mapping = {
+            'incident_type': 'incident_type',
+            'collision_type': 'collision_type',
+            'incident_severity': 'incident_severity',
+            'authorities_contacted': 'authorities_contacted',
+            'property_damage': 'property_damage',
+            'police_report_available': 'police_report_available',
+        }
+        for form_key, col_name in categorical_mapping.items():
+            if form_key in input_dict and col_name in self.ins_label_encoders:
+                le = self.ins_label_encoders[col_name]
+                value = input_dict[form_key]
+                if value in le.classes_:
+                    row[col_name] = le.transform([value])[0]
+                # else: keep the median default (already numeric)
+        
+        # Build DataFrame in the exact column order used during training
+        df = pd.DataFrame([row])[self.ins_columns]
+        
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            # This is naive for a real prediction setup (feature engineering needed here too ideally), 
-            # assuming df has the exactly same feature names/order.
-            # In dash, we will pass pre-engineered dictionary items directly.
             X_scaled = self.scaler_ins.transform(df)
         
         X_scaled = X_scaled.astype(np.float32)
@@ -132,12 +192,45 @@ class FraudEnsemble:
         """Predicts ecommerce fraud instance.
         
         Args:
-            input_dict (dict): Dictionary of features.
+            input_dict (dict): Dictionary of features from the dashboard form.
         Returns:
             FraudResult: Result wrapper object.
         """
-        df = pd.DataFrame([input_dict])
-        X_scaled = self.scaler_eco.transform(df)
+        import warnings
+        
+        # Start with median defaults for all training columns
+        row = dict(self.eco_medians)
+        
+        # Map dashboard form fields to their corresponding training columns
+        field_mapping = {
+            'TransactionAmount': 'Transaction_Amount',
+            'AccountAgeDays': 'Account_Age_Days',
+            'TransactionHour': 'Transaction_Hour',
+            'is_new_account': 'is_new_account' if 'is_new_account' in row else None,
+            'address_mismatch': 'address_mismatch' if 'address_mismatch' in row else None,
+            'is_high_value': 'is_high_value' if 'is_high_value' in row else None,
+            'is_unusual_hour': 'is_unusual_hour' if 'is_unusual_hour' in row else None,
+        }
+        
+        # Overwrite fields from form input
+        for form_key, col_name in field_mapping.items():
+            if col_name and form_key in input_dict and col_name in row:
+                row[col_name] = input_dict[form_key]
+        
+        # Also set derived time fields from TransactionHour
+        if 'TransactionHour' in input_dict:
+            hr = input_dict['TransactionHour']
+            if 'hour' in row:
+                row['hour'] = hr
+            if 'is_weekend' in row and 'is_weekend' not in input_dict:
+                row['is_weekend'] = 0  # default to weekday
+        
+        # Build DataFrame in the exact column order used during training
+        df = pd.DataFrame([row])[self.eco_columns]
+        
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            X_scaled = self.scaler_eco.transform(df)
         X_scaled = X_scaled.astype(np.float32)
         
         # Reshape for LSTM (pad with zeros for multiple timesteps)

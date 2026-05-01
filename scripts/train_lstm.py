@@ -29,7 +29,7 @@ def main():
 
     X_encoded = preprocessor.encode_features(X_df, 'ecommerce')
 
-    # 🔍 Debug check (IMPORTANT)
+    # Debug check (IMPORTANT)
     print("Data types after encoding:\n", X_encoded.dtypes)
 
     # Ensure numeric

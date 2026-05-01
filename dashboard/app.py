@@ -111,27 +111,58 @@ with tabs[0]:
 with tabs[1]:
     st.header("Insurance Claim Analyzer")
     with st.form("ins_form"):
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         with col1:
             age = st.number_input("Age", min_value=18, max_value=100, value=35)
-            deductible = st.number_input("Deductible", min_value=0, value=500)
             months_as_customer = st.number_input("Months as Customer", min_value=0, value=24)
-            number_of_past_complaints = st.number_input("Number of Past Complaints", min_value=0, value=0)
+            deductible = st.number_input("Deductible", min_value=0, value=500)
+            policy_annual_premium = st.number_input("Policy Annual Premium ($)", min_value=0.0, value=1200.0)
+            bodily_injuries = st.number_input("Bodily Injuries", min_value=0, max_value=5, value=1)
         with col2:
             incident_type = st.selectbox("Incident Type", ["Single Vehicle Collision", "Multi-vehicle Collision", "Parked Car", "Vehicle Theft"])
             collision_type = st.selectbox("Collision Type", ["Rear Collision", "Side Collision", "Front Collision", "?"])
             incident_severity = st.selectbox("Incident Severity", ["Minor Damage", "Total Loss", "Major Damage", "Trivial Damage"])
-            authorities_contacted = st.selectbox("Authorities Contacted", ["Police", "Fire", "Ambulance", "None"])
+            authorities_contacted = st.selectbox("Authorities Contacted", ["Police", "Fire", "Ambulance", "Other"])
+            property_damage = st.selectbox("Property Damage?", ["YES", "NO", "?"])
+            police_report_available = st.selectbox("Police Report Available?", ["YES", "NO", "?"])
+        with col3:
+            total_claim_amount = st.number_input("Total Claim Amount ($)", min_value=0.0, value=50000.0)
+            injury_claim = st.number_input("Injury Claim ($)", min_value=0.0, value=6000.0)
+            property_claim = st.number_input("Property Claim ($)", min_value=0.0, value=6000.0)
+            vehicle_claim = st.number_input("Vehicle Claim ($)", min_value=0.0, value=40000.0)
+            witnesses = st.number_input("Witnesses", min_value=0, max_value=10, value=1)
+            number_of_vehicles_involved = st.number_input("Vehicles Involved", min_value=1, max_value=4, value=1)
+            incident_hour = st.slider("Incident Hour of Day", 0, 23, 12)
         submitted = st.form_submit_button("Analyze Claim")
         
     if submitted:
-        # Pass dummy numerical encoding for prediction as real one is complex for GUI 
-        inputs = {'age': age, 'deductible': deductible, 'months_as_customer': months_as_customer, 'number_of_past_complaints': number_of_past_complaints, 'incident_type': incident_type, 'collision_type': collision_type, 'incident_severity': incident_severity, 'authorities_contacted': authorities_contacted, 'high_deductible': 1 if deductible>=700 else 0, 'multiple_claims': 1 if number_of_past_complaints>1 else 0, 'recent_claim': 1 if months_as_customer<6 else 0, 'young_driver': 1 if age<=25 else 0}
+        inputs = {
+            'age': age,
+            'deductible': deductible,
+            'months_as_customer': months_as_customer,
+            'incident_type': incident_type,
+            'collision_type': collision_type,
+            'incident_severity': incident_severity,
+            'authorities_contacted': authorities_contacted,
+            'property_damage': property_damage,
+            'police_report_available': police_report_available,
+            'total_claim_amount': total_claim_amount,
+            'injury_claim': injury_claim,
+            'property_claim': property_claim,
+            'vehicle_claim': vehicle_claim,
+            'policy_annual_premium': policy_annual_premium,
+            'bodily_injuries': bodily_injuries,
+            'witnesses': witnesses,
+            'number_of_vehicles_involved': number_of_vehicles_involved,
+            'incident_hour_of_the_day': incident_hour,
+            'recent_claim': 1 if months_as_customer < 6 else 0,
+            'young_driver': 1 if age <= 25 else 0,
+        }
         
-        # NOTE: Predict on raw string is handled internally or mock handled
         result = ensemble.predict_insurance(inputs)
         show_fraud_gauge(result.fraud_probability)
         show_alert_badge(result.alert_level)
+        show_result_metrics(result)
         st.session_state.history.append({
             'timestamp': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             'domain': result.domain,
