@@ -96,6 +96,8 @@ class FraudEnsemble:
                 df[col] = 0.0 # simple default for missing synthetic features
         df = df[cols]
         
+        if self.scaler_cc is None:
+            raise ValueError("Scaler not loaded. Call load_models() first.")
         X_scaled = self.scaler_cc.transform(df)
         X_scaled = X_scaled.astype(np.float32)
         

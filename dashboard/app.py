@@ -31,6 +31,7 @@ if not models_loaded:
     st.code("python scripts/train_lstm.py")
     st.stop()
 
+
 def show_fraud_gauge(prob: float):
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
