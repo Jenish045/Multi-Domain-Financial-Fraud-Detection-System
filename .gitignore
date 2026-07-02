@@ -1,7 +1,6 @@
 data/raw/
 data/processed/
 saved_models/
-results/
 venv/
 __pycache__/
 *.pyc

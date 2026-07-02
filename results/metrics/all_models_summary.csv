@@ -1,0 +1,4 @@
+Domain,Model,Precision,Recall,F1,ROC-AUC
+Credit Card,Autoencoder,0.0276,0.8378,0.0534,0.932
+Insurance,RF / XGBoost,0.6818,0.8108,0.7407,0.9033
+E-Commerce,LSTM,0.2327,0.6917,0.3482,0.8343
