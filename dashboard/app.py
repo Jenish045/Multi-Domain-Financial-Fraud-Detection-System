@@ -4,23 +4,28 @@ import pandas as pd
 import plotly.graph_objects as go
 import os
 import sys
-import tensorflow as tf
-from tensorflow import keras
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.models.ensemble import FraudEnsemble
 from src.config import PLOTS_DIR
 
+from src.utils.model_downloader import download_models
+from src.config import SAVED_MODELS
+
 st.set_page_config(page_title="FraudGuard AI", layout="wide", page_icon="🛡")
 
 @st.cache_resource
 def load_all_models():
+    download_models(SAVED_MODELS)
+
     ensemble = FraudEnsemble()
+
     try:
         ensemble.load_models()
         return ensemble, True
     except Exception as e:
-        return None, False
+        st.exception(e)
+        raise
 
 ensemble, models_loaded = load_all_models()
 
