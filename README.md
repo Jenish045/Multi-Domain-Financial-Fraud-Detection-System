@@ -25,6 +25,11 @@ By deploying domain-specific models, the system maximizes recall and precision b
 - Automatic Hugging Face model download: Automatically pulls trained weights and preprocessing structures on startup.
 - Responsive UI: Adaptive layout designed for desktop and mobile browsers.
 
+
+## Live Demo
+Click below link for live demo: 
+- https://multi-domain-financial-fraud-detection-system-jxevkcse9kou7mtw.streamlit.app/
+
 ## Architecture
 
 The diagram below outlines the system data flow and prediction path:
