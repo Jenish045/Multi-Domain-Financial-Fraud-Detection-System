@@ -47,8 +47,17 @@ class FraudPreprocessor:
             
         df['fraud_reported'] = df['fraud_reported'].map({'Y': 1, 'N': 0})
         
-        cols_to_drop = ['policy_number', 'policy_bind_date', 'insured_zip', '_c39']
-        df = df.drop(columns=[col for col in cols_to_drop if col in df.columns])
+        # Keep only the features collected/derived by the Streamlit dashboard + target
+        cols_to_keep = [
+            'age', 'months_as_customer', 'policy_deductable', 'policy_annual_premium',
+            'bodily_injuries', 'witnesses', 'number_of_vehicles_involved',
+            'incident_hour_of_the_day', 'total_claim_amount', 'injury_claim',
+            'property_claim', 'vehicle_claim', 'incident_type', 'collision_type',
+            'incident_severity', 'authorities_contacted', 'property_damage',
+            'police_report_available', 'fraud_reported'
+        ]
+        
+        df = df[[col for col in cols_to_keep if col in df.columns]]
         
         for col in df.select_dtypes(include=['number']).columns:
             df[col] = df[col].fillna(df[col].median())

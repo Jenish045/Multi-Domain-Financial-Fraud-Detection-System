@@ -2,13 +2,13 @@ import streamlit as st
 import datetime
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.express as px
 import os
 import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.models.ensemble import FraudEnsemble
 from src.config import PLOTS_DIR
-
 from src.utils.model_downloader import download_models
 from src.config import SAVED_MODELS
 
@@ -17,9 +17,7 @@ st.set_page_config(page_title="FraudGuard AI", layout="wide", page_icon="🛡")
 @st.cache_resource
 def load_all_models():
     download_models(SAVED_MODELS)
-
     ensemble = FraudEnsemble()
-
     try:
         ensemble.load_models()
         return ensemble, True
@@ -35,7 +33,6 @@ if not models_loaded:
     st.code("python scripts/train_random_forest.py")
     st.code("python scripts/train_lstm.py")
     st.stop()
-
 
 def show_fraud_gauge(prob: float):
     fig = go.Figure(go.Indicator(
@@ -53,7 +50,7 @@ def show_fraud_gauge(prob: float):
         }
     ))
     fig.update_layout(height=250)
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 def show_alert_badge(alert_level: str):
     colors = {"Low": "#27500A", "Medium": "#633806", "High": "#791F1F"}
@@ -78,10 +75,12 @@ if 'history' not in st.session_state:
 st.sidebar.title("FraudGuard AI")
 st.sidebar.markdown("Multi-Domain Fraud Detection")
 st.sidebar.divider()
-st.sidebar.markdown("""
+
+ins_model_display = ensemble.insurance_model_name if hasattr(ensemble, 'insurance_model_name') else "Random Forest / XGBoost"
+st.sidebar.markdown(f"""
 **Active Models:**
 - 💳 **Credit Card** → Autoencoder (TensorFlow)
-- 🚗 **Insurance**   → Random Forest / XGBoost
+- 🚗 **Insurance**   → {ins_model_display}
 - 🛒 **E-Commerce**  → LSTM (TensorFlow)
 """)
 
@@ -205,6 +204,7 @@ with tabs[2]:
         result = ensemble.predict_ecommerce(inputs)
         show_fraud_gauge(result.fraud_probability)
         show_alert_badge(result.alert_level)
+        show_result_metrics(result)
         st.session_state.history.append({
             'timestamp': datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             'domain': result.domain,
@@ -227,18 +227,111 @@ with tabs[3]:
     col3.metric("Avg Risk Score", f"{avg_risk:.2%}")
     col4.metric("High Risk Count", high_risk)
     
+    st.subheader("Live Analytics")
+    if total_checked > 0:
+        df_history = pd.DataFrame(st.session_state.history)
+        
+        fig_pie = px.pie(
+            df_history, 
+            names='fraud_label', 
+            title="Fraud vs Genuine Predictions",
+            color='fraud_label',
+            color_discrete_map={True: '#d9534f', False: '#5cb85c'}
+        )
+        
+        domain_counts = df_history['domain'].value_counts().reset_index()
+        domain_counts.columns = ['Domain', 'Count']
+        all_domains = pd.DataFrame({'Domain': ['Credit Card', 'Insurance', 'E-Commerce']})
+        domain_counts = pd.merge(all_domains, domain_counts, on='Domain', how='left').fillna(0)
+        fig_domain = px.bar(
+            domain_counts, 
+            x='Domain', 
+            y='Count', 
+            title="Predictions by Domain",
+            color='Domain'
+        )
+        
+        fig_hist = px.histogram(
+            df_history, 
+            x='fraud_prob', 
+            nbins=20, 
+            title="Fraud Probability Distribution",
+            labels={'fraud_prob': 'Fraud Probability'},
+            color_discrete_sequence=['#f0ad4e']
+        )
+        
+        alert_counts = df_history['alert_level'].value_counts().reset_index()
+        alert_counts.columns = ['Alert Level', 'Count']
+        alert_order = pd.DataFrame({'Alert Level': ['Low', 'Medium', 'High']})
+        alert_counts = pd.merge(alert_order, alert_counts, on='Alert Level', how='left').fillna(0)
+        fig_alert = px.bar(
+            alert_counts, 
+            x='Alert Level', 
+            y='Count', 
+            title="Alert Level Distribution",
+            color='Alert Level',
+            color_discrete_map={'Low': '#5cb85c', 'Medium': '#f0ad4e', 'High': '#d9534f'}
+        )
+        
+        df_time = df_history.copy()
+        df_time['timestamp'] = pd.to_datetime(df_time['timestamp'])
+        df_time = df_time.sort_values('timestamp')
+        fig_time = px.line(
+            df_time, 
+            x='timestamp', 
+            y='fraud_prob', 
+            title="Predictions Over Time (Fraud Probability)",
+            labels={'timestamp': 'Time', 'fraud_prob': 'Fraud Probability'},
+            markers=True
+        )
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            st.plotly_chart(fig_pie, width="stretch")
+            st.plotly_chart(fig_hist, width="stretch")
+        with c2:
+            st.plotly_chart(fig_domain, width="stretch")
+            st.plotly_chart(fig_alert, width="stretch")
+            
+        st.plotly_chart(fig_time, width="stretch")
+    else:
+        st.info("No predictions made yet to display live analytics.")
+        
     st.subheader("Prediction History")
     if total_checked > 0:
         history_df = pd.DataFrame(st.session_state.history).tail(20)
-        st.dataframe(history_df, use_container_width=True)
+        st.dataframe(history_df, width="stretch")
+        
+        df_export = pd.DataFrame(st.session_state.history)
+        if 'fraud_prob' in df_export.columns:
+            df_export = df_export.rename(columns={'fraud_prob': 'fraud_probability'})
+        cols_to_export = ['timestamp', 'domain', 'fraud_probability', 'fraud_label', 'alert_level']
+        df_export = df_export[[col for col in cols_to_export if col in df_export.columns]]
+        csv_data = df_export.to_csv(index=False).encode('utf-8')
+        
+        st.download_button(
+            label="Download Prediction History",
+            data=csv_data,
+            file_name="prediction_history.csv",
+            mime="text/csv"
+        )
     else:
         st.info("No predictions made yet.")
         
-    st.subheader("Global Model Evaluation (ROC)")
-    roc_plot_path = os.path.join(PLOTS_DIR, 'roc_all_models.png')
-    f1_plot_path = os.path.join(PLOTS_DIR, 'f1_comparison.png')
-    
-    if os.path.exists(f1_plot_path):
-        st.image(f1_plot_path, caption='F1 Score Comparison')
-    else:
-        st.info("F1 chart not found.")
+        st.subheader("Model Performance (ROC-AUC)")
+
+    roc_plots = {
+        "Credit Card Autoencoder": os.path.join(PLOTS_DIR, "roc_autoencoder.png"),
+        "Insurance RF/XGBoost": os.path.join(PLOTS_DIR, "roc_insurance.png"),
+        "E-Commerce LSTM": os.path.join(PLOTS_DIR, "roc_ecommerce.png"),
+    }
+
+    cols = st.columns(3)
+
+    for col, (title, path) in zip(cols, roc_plots.items()):
+        with col:
+            st.markdown(f"**{title}**")
+            if os.path.exists(path):
+                st.image(path, use_container_width=True)
+            else:
+                st.info("ROC curve not found.")

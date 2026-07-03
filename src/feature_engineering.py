@@ -2,16 +2,7 @@ import pandas as pd
 import numpy as np
 
 class FeatureEngineer:
-    """Class to perform feature engineering for the datasets."""
-
     def credit_card_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Engineers features for credit card dataset.
-        
-        Args:
-            df (pd.DataFrame): Data.
-        Returns:
-            pd.DataFrame: Data with new features.
-        """
         df_out = df.copy()
         if 'Amount' in df_out.columns:
             df_out['amt_log'] = np.log1p(df_out['Amount'])
@@ -25,13 +16,6 @@ class FeatureEngineer:
         return df_out
 
     def insurance_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Engineers features for insurance dataset.
-        
-        Args:
-            df (pd.DataFrame): Data.
-        Returns:
-            pd.DataFrame: Data with new features.
-        """
         df_out = df.copy()
         if 'deductible' in df_out.columns:
             df_out['high_deductible'] = df_out['deductible'].apply(lambda x: 1 if x >= 700 else 0)
@@ -45,36 +29,20 @@ class FeatureEngineer:
         return df_out
 
     def ecommerce_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Engineers features for ecommerce dataset.
-        
-        Args:
-            df (pd.DataFrame): Data.
-        Returns:
-            pd.DataFrame: Data with new features.
-        """
         df_out = df.copy()
-        if 'shipping_address' in df_out.columns and 'billing_address' in df_out.columns:
-            df_out['address_mismatch'] = (df_out['shipping_address'] != df_out['billing_address']).astype(int)
-        if 'AccountAgeDays' in df_out.columns:
-            df_out['is_new_account'] = df_out['AccountAgeDays'].apply(lambda x: 1 if x < 30 else 0)
-        if 'TransactionAmount' in df_out.columns:
-            amt_95th = df_out['TransactionAmount'].quantile(0.95)
-            df_out['is_high_value'] = df_out['TransactionAmount'].apply(lambda x: 1 if x > amt_95th else 0)
-        if 'TransactionHour' in df_out.columns:
-            df_out['is_unusual_hour'] = df_out['TransactionHour'].apply(lambda x: 1 if x < 6 or x > 22 else 0)
+        if 'Shipping_Address' in df_out.columns and 'Billing_Address' in df_out.columns:
+            df_out['address_mismatch'] = (df_out['Shipping_Address'] != df_out['Billing_Address']).astype(int)
+        if 'Account_Age_Days' in df_out.columns:
+            df_out['is_new_account'] = (df_out['Account_Age_Days'] < 30).astype(int)
+        if 'Transaction_Amount' in df_out.columns:
+            amt_95th = df_out['Transaction_Amount'].quantile(0.95)
+            df_out['is_high_value'] = (df_out['Transaction_Amount'] > amt_95th).astype(int)
+        if 'Transaction_Hour' in df_out.columns:
+            df_out['is_unusual_hour'] = df_out['Transaction_Hour'].apply(lambda x: 1 if x < 6 or x > 22 else 0)
             
         return df_out
 
     def create_lstm_sequences(self, X: np.ndarray, y: np.ndarray, seq_len: int) -> tuple[np.ndarray, np.ndarray]:
-        """Creates sliding window sequences for LSTM training.
-        
-        Args:
-            X (np.ndarray): 2D array of features.
-            y (np.ndarray): Targets.
-            seq_len (int): Length of sliding window.
-        Returns:
-            tuple: Arrays of sequences and targets.
-        """
         n_samples = len(X)
         if n_samples <= seq_len:
             raise ValueError("Not enough samples to create sequences of this length.")

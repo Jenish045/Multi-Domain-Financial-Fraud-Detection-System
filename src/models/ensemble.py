@@ -17,21 +17,23 @@ class FraudResult:
     confidence: str
 
 def get_alert_level(prob: float) -> str:
-    """Gets alert level based on probability."""
-    if prob < 0.4: return "Low"
-    elif prob < 0.7: return "Medium"
-    else: return "High"
+    if prob < 0.4:
+        return "Low"
+    elif prob < 0.7:
+        return "Medium"
+    else:
+        return "High"
 
 def get_confidence(prob: float) -> str:
-    """Gets confidence score based on margin from decision boundary."""
     dist_from_05 = abs(prob - 0.5)
-    if dist_from_05 > 0.35: return "High"
-    elif dist_from_05 > 0.15: return "Medium"
-    else: return "Low"
+    if dist_from_05 > 0.35:
+        return "High"
+    elif dist_from_05 > 0.15:
+        return "Medium"
+    else:
+        return "Low"
 
 class FraudEnsemble:
-    """Ensemble for predicting fraud probabilities across all three domains."""
-
     def __init__(self):
         self.models_loaded = False
         self.ae_model = None
@@ -43,18 +45,16 @@ class FraudEnsemble:
         self.scaler_ins = None
         self.scaler_eco = None
         
-        # Insurance inference artifacts
         self.ins_label_encoders = None
         self.ins_columns = None
         self.ins_medians = None
         
-        # E-commerce inference artifacts
         self.eco_label_encoders = None
         self.eco_columns = None
         self.eco_medians = None
-        
+        self.insurance_model_name = "Random Forest / XGBoost"
+
     def load_models(self):
-        """Loads all required models and scalers."""
         self.ae_model = keras.models.load_model(os.path.join(SAVED_MODELS, 'autoencoder.keras'))
         self.ae_threshold = joblib.load(os.path.join(SAVED_MODELS, 'ae_threshold.pkl'))
         
@@ -62,50 +62,42 @@ class FraudEnsemble:
             best_ins = f.read().strip()
         self.rf_model = joblib.load(os.path.join(SAVED_MODELS, f"{best_ins}.pkl"))
         
+        if best_ins == "xgboost":
+            self.insurance_model_name = "XGBoost"
+        elif best_ins == "random_forest":
+            self.insurance_model_name = "Random Forest"
+        else:
+            self.insurance_model_name = best_ins
+            
         self.lstm_model = keras.models.load_model(os.path.join(SAVED_MODELS, 'lstm_model.keras'))
         
         self.scaler_cc = joblib.load(os.path.join(SAVED_MODELS, 'scaler_credit_card.pkl'))
         self.scaler_ins = joblib.load(os.path.join(SAVED_MODELS, 'scaler_insurance.pkl'))
         self.scaler_eco = joblib.load(os.path.join(SAVED_MODELS, 'scaler_ecommerce.pkl'))
         
-        # Load insurance inference artifacts
         self.ins_label_encoders = joblib.load(os.path.join(SAVED_MODELS, 'insurance_label_encoders.pkl'))
         self.ins_columns = joblib.load(os.path.join(SAVED_MODELS, 'insurance_columns.pkl'))
         self.ins_medians = joblib.load(os.path.join(SAVED_MODELS, 'insurance_medians.pkl'))
         
-        # Load e-commerce inference artifacts
         self.eco_label_encoders = joblib.load(os.path.join(SAVED_MODELS, 'ecommerce_label_encoders.pkl'))
         self.eco_columns = joblib.load(os.path.join(SAVED_MODELS, 'ecommerce_columns.pkl'))
         self.eco_medians = joblib.load(os.path.join(SAVED_MODELS, 'ecommerce_medians.pkl'))
         
         self.models_loaded = True
-        print("All models loaded successfully")
 
     def predict_credit_card(self, input_dict: dict) -> FraudResult:
-        """Predicts credit card fraud instance.
-        
-        Args:
-            input_dict (dict): Dictionary with features.
-        Returns:
-            FraudResult: Result wrapper object.
-        """
         cols = [f'V{i}' for i in range(1, 29)] + ['amt_log', 'amt_deviation', 'time_hour', 'is_night']
         df = pd.DataFrame([input_dict])
         for col in cols:
             if col not in df.columns:
-                df[col] = 0.0 # simple default for missing synthetic features
+                df[col] = 0.0
         df = df[cols]
         
         if self.scaler_cc is None:
-            raise ValueError("Scaler not loaded. Call load_models() first.")
-        X_scaled = self.scaler_cc.transform(df)
-        X_scaled = X_scaled.astype(np.float32)
+            raise ValueError("Scaler not loaded.")
+        X_scaled = self.scaler_cc.transform(df).astype(np.float32)
         
         errors = np.mean(np.power(X_scaled - self.ae_model.predict(X_scaled, verbose=0), 2), axis=1)
-        prob = np.clip((errors[0] - np.min(errors)) / (np.percentile(errors, 99) - np.min(errors) + 1e-8), 0, 1)
-        # Using simple threshold rule as placeholder for dynamically scaled prob.
-        # Alternatively, we could just say anything above threshold has >0.5 probability (cap it relative to threshold).
-        # A simpler way assuming error ranges are similar:
         is_fraud = bool(errors[0] > self.ae_threshold)
         final_prob = min(errors[0] / (self.ae_threshold * 2), 1.0) if not is_fraud else max(0.51, min(errors[0] / (self.ae_threshold * 2), 1.0))
         
@@ -119,19 +111,9 @@ class FraudEnsemble:
         )
 
     def predict_insurance(self, input_dict: dict) -> FraudResult:
-        """Predicts insurance fraud instance.
-        
-        Args:
-            input_dict (dict): Dictionary of features from the dashboard form.
-        Returns:
-            FraudResult: Result wrapper object.
-        """
         import warnings
-        
-        # Start with median defaults for all 37 training columns
         row = dict(self.ins_medians)
         
-        # Map dashboard form fields to their corresponding training columns
         field_mapping = {
             'age': 'age',
             'months_as_customer': 'months_as_customer',
@@ -149,12 +131,10 @@ class FraudEnsemble:
             'young_driver': 'young_driver',
         }
         
-        # Overwrite numeric fields from form input
         for form_key, col_name in field_mapping.items():
             if form_key in input_dict and col_name in row:
                 row[col_name] = input_dict[form_key]
         
-        # Encode categorical fields from the form using saved label encoders
         categorical_mapping = {
             'incident_type': 'incident_type',
             'collision_type': 'collision_type',
@@ -169,9 +149,7 @@ class FraudEnsemble:
                 value = input_dict[form_key]
                 if value in le.classes_:
                     row[col_name] = le.transform([value])[0]
-                # else: keep the median default (already numeric)
         
-        # Build DataFrame in the exact column order used during training
         df = pd.DataFrame([row])[self.ins_columns]
         
         with warnings.catch_warnings():
@@ -186,24 +164,14 @@ class FraudEnsemble:
             fraud_probability=prob,
             fraud_label=bool(prob > 0.5),
             alert_level=get_alert_level(prob),
-            model_used="Random Forest / XGBoost",
+            model_used=self.insurance_model_name,
             confidence=get_confidence(prob)
         )
 
     def predict_ecommerce(self, input_dict: dict) -> FraudResult:
-        """Predicts ecommerce fraud instance.
-        
-        Args:
-            input_dict (dict): Dictionary of features from the dashboard form.
-        Returns:
-            FraudResult: Result wrapper object.
-        """
         import warnings
-        
-        # Start with median defaults for all training columns
         row = dict(self.eco_medians)
         
-        # Map dashboard form fields to their corresponding training columns
         field_mapping = {
             'TransactionAmount': 'Transaction_Amount',
             'AccountAgeDays': 'Account_Age_Days',
@@ -214,20 +182,17 @@ class FraudEnsemble:
             'is_unusual_hour': 'is_unusual_hour' if 'is_unusual_hour' in row else None,
         }
         
-        # Overwrite fields from form input
         for form_key, col_name in field_mapping.items():
             if col_name and form_key in input_dict and col_name in row:
                 row[col_name] = input_dict[form_key]
         
-        # Also set derived time fields from TransactionHour
         if 'TransactionHour' in input_dict:
             hr = input_dict['TransactionHour']
             if 'hour' in row:
                 row['hour'] = hr
             if 'is_weekend' in row and 'is_weekend' not in input_dict:
-                row['is_weekend'] = 0  # default to weekday
+                row['is_weekend'] = 0
         
-        # Build DataFrame in the exact column order used during training
         df = pd.DataFrame([row])[self.eco_columns]
         
         with warnings.catch_warnings():
@@ -235,7 +200,6 @@ class FraudEnsemble:
             X_scaled = self.scaler_eco.transform(df)
         X_scaled = X_scaled.astype(np.float32)
         
-        # Reshape for LSTM (pad with zeros for multiple timesteps)
         n_features = X_scaled.shape[1]
         seq = np.zeros((1, LSTM_SEQ_LEN, n_features), dtype=np.float32)
         seq[0, -1, :] = X_scaled[0]
