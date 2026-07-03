@@ -140,25 +140,6 @@ To start the interactive Streamlit dashboard:
 streamlit run dashboard/app.py
 ```
 
-## Screenshots Section
-
-This section contains visual demonstrations of the running dashboard interfaces:
-
-### Home Dashboard Overview
-Insert screenshot of the dashboard main page showing application options here.
-
-### Credit Card Transaction Checker
-Insert screenshot of the Credit Card transaction evaluation tool interface here.
-
-### Insurance Claim Analyzer
-Insert screenshot of the Insurance claim parameter input forms and results gauge here.
-
-### E-Commerce Order Checker
-Insert screenshot of the E-Commerce checker forms, toggles, and results here.
-
-### Live Analytics & Evaluation
-Insert screenshot of the Live Analytics Plotly dashboard charts here.
-
 ## Future Improvements
 
 - Introduce ensemble voting models for Credit Card transactions combining isolation forests with neural networks.
@@ -171,5 +152,5 @@ This project is licensed under the MIT License.
 
 ## Author
 
-Jenish Patel
-Professional Software Engineer & Machine Learning Developer
+Jenish Upadhyay
+Machine Learning Engineer
